@@ -1,0 +1,13 @@
+# netlify.toml
+[build]
+  publish = "public"       # frontend folder
+  functions = "functions"  # serverless functions folder
+
+[dev]
+  functions = "functions"  # local dev
+
+# Redirect /generate to the server.js function
+[[redirects]]
+  from = "/generate"
+  to = "/.netlify/functions/server"
+  status = 200

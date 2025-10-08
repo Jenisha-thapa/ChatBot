@@ -1,48 +1,34 @@
-import express from "express";
-import bodyParser from "body-parser";
-import dotenv from "dotenv";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// functions/server.js
+import { GoogleGenAI } from "@google/genai";
 
-dotenv.config();
-const app = express();
-app.use(bodyParser.json());
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*"); // allow all origins
-  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
-  next();
-});
+const API_KEY = process.env.API_KEY;
+const ai = new GoogleGenAI({ apiKey: API_KEY });
 
-
-const genAI = new GoogleGenerativeAI(process.env.API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-// POST /generate endpoint
-app.post("/generate", async (req, res) => {
+export async function handler(event, context) {
   try {
-    const { prompt } = req.body;
-    if (!prompt) return res.status(400).json({ error: "Prompt is required" });
+    const body = JSON.parse(event.body);
+    const prompt = body.prompt;
 
-    // Generate content
-    const result = await model.generateContent(prompt);
-    const text = result.response?.text();
+    if (!prompt) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Missing prompt" }) };
+    }
 
-    // Clean response for the user
-    res.json({
-      success: true,
+    const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      prompt,
-      reply: text || "No meaningful response received.",
+      contents: prompt,
+      config: { temperature: 0.7, maxOutputTokens: 512 },
     });
-  } catch (error) {
-    console.error("Error generating content:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Internal Server Error",
-    });
-  }
-});
 
-// Start the server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+    let reply = "No reply";
+    if (response?.candidates?.[0]?.content?.parts?.length) {
+      reply = response.candidates[0].content.parts.map(p => p.text || "").join("\n");
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ success: true, model: "gemini-2.5-flash", prompt, reply }),
+    };
+  } catch (err) {
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+  }
+}
